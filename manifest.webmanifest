@@ -1,0 +1,66 @@
+{
+ "id": "./",
+ "name": "הלוז שלי",
+ "short_name": "הלוז",
+ "description": "לוז אישי לתורים וסידורים: משתפים הודעה או צילום מסך והפרטים מתמלאים לבד.",
+ "lang": "he",
+ "dir": "rtl",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "orientation": "portrait",
+ "background_color": "#f3f5f6",
+ "theme_color": "#0b6e69",
+ "icons": [
+  {
+   "src": "icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "icon-maskable.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ],
+ "shortcuts": [
+  {
+   "name": "הוסף תור או סידור",
+   "short_name": "הוסף",
+   "url": "./?add=1",
+   "icons": [
+    {
+     "src": "icon-192.png",
+     "sizes": "192x192",
+     "type": "image/png"
+    }
+   ]
+  }
+ ],
+ "share_target": {
+  "action": "./share",
+  "method": "POST",
+  "enctype": "multipart/form-data",
+  "params": {
+   "title": "title",
+   "text": "text",
+   "url": "url",
+   "files": [
+    {
+     "name": "shots",
+     "accept": [
+      "image/*"
+     ]
+    }
+   ]
+  }
+ }
+}

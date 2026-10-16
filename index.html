@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src data:; img-src 'self' blob: data:; connect-src 'self' https://api.anthropic.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="לוז אישי לתורים וסידורים: משתפים הודעה או צילום מסך והפרטים מתמלאים לבד.">
+<meta name="theme-color" content="#f3f5f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f181c" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="fonts.css">
+<title>הלוז שלי</title>
+<style>html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}</style>
+<style>
+/* Layout: one phone-width column. Today and tomorrow always on top in large type, then open errands by deadline, then later appointments by day. One add button fixed at the bottom. */
+:root {
+  --bg: #f3f5f6; --surface: #ffffff; --line: #d9dfe2; --fg: #16242b; --muted: #5b6b73;
+  --accent: #0b6e69; --accent-fg: #ffffff; --accent-soft: #dcefed;
+  --high: #c2331f; --high-soft: #fbe6e2; --low: #9aa8ae; --shade: rgb(10 25 30 / .5);
+  --display: "Rubik", "Arial Hebrew", Arial, sans-serif;
+  --body: "Assistant", "Arial Hebrew", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f181c; --surface: #18252b; --line: #2a3a42; --fg: #e6edf0; --muted: #94a5ad;
+  --accent: #4fc3bb; --accent-fg: #06201e; --accent-soft: #143634;
+  --high: #ff8a75; --high-soft: #3a1d18; --low: #5f7078; --shade: rgb(0 0 0 / .6); color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f181c; --surface: #18252b; --line: #2a3a42; --fg: #e6edf0; --muted: #94a5ad;
+  --accent: #4fc3bb; --accent-fg: #06201e; --accent-soft: #143634;
+  --high: #ff8a75; --high-soft: #3a1d18; --low: #5f7078; --shade: rgb(0 0 0 / .6); color-scheme: dark }
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 17px; line-height: 1.45; margin: 0; -webkit-tap-highlight-color: transparent }
+.wrap { max-width: 34rem; margin-inline: auto; padding-inline: 16px; padding-block: 20px 120px; display: flex; flex-direction: column; gap: 26px }
+.head { display: flex; align-items: baseline; gap: 12px }
+h1 { font-family: var(--display); font-weight: 700; font-size: 1.5rem; margin: 0 }
+.head .sub { color: var(--muted); font-size: .95rem; flex: 1 }
+button, input, select, textarea { font: inherit; color: inherit }
+button { cursor: pointer }
+a { color: inherit }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.agenda { display: flex; flex-direction: column; gap: 26px }
+
+.setup { background: var(--accent-soft); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start }
+.day h2 { font-family: var(--display); font-weight: 500; font-size: 1.05rem; margin: 0; display: flex; gap: 10px; align-items: baseline; color: var(--muted) }
+.day h2 small { font-family: var(--body); font-weight: 400; font-size: .9rem }
+.day.big h2 { font-size: 1.9rem; font-weight: 700; color: var(--fg) }
+.day.big.today h2 { color: var(--accent) }
+.day.alert h2 { color: var(--high) }
+.day h3 { font-family: var(--body); font-weight: 600; font-size: .95rem; color: var(--muted); margin: 14px 0 0 }
+.none { color: var(--muted); padding-block: 6px }
+ul.rows { list-style: none; margin: 6px 0 0; padding: 0; background: var(--surface); border-radius: 14px; border: 1px solid var(--line) }
+.row { display: grid; grid-template-columns: 3.3rem minmax(0, 1fr) 44px; gap: 8px; align-items: center; padding: 10px 8px 10px 4px; border-block-start: 1px solid var(--line) }
+.row:first-child { border-block-start: 0 }
+.when { font-family: var(--display); font-weight: 500; font-variant-numeric: tabular-nums; direction: ltr; text-align: center }
+.open { background: none; border: 0; padding: 2px 0; text-align: start; min-width: 0; display: flex; flex-direction: column; gap: 1px }
+.title { font-weight: 700; overflow-wrap: anywhere; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap }
+.imp { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); align-self: center }
+.imp.high { background: var(--high) } .imp.low { background: var(--low) }
+.pill { font-size: .78rem; font-weight: 700; border-radius: 999px; padding: 0 8px; background: var(--accent-soft); color: var(--accent) }
+.meta { color: var(--muted); font-size: .93rem; overflow-wrap: anywhere }
+.meta.warn { color: var(--high) }
+.check { justify-self: center; width: 44px; height: 44px; border: 0; background: transparent; padding: 0; display: grid; place-items: center }
+.check::before { content: ""; width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--line); box-sizing: border-box; grid-area: 1 / 1 }
+.check span { grid-area: 1 / 1; color: var(--accent-fg); font-size: 16px; line-height: 1 }
+.row.done .check::before { background: var(--accent); border-color: var(--accent) }
+.fwarn { grid-column: 1 / -1; color: var(--high); font-size: .9rem; font-weight: 600 }
+.row.done .title, .row.past .title { color: var(--muted); font-weight: 600 }
+.row.done .title span:not(.imp) { text-decoration: line-through }
+.row.past .when { color: var(--muted) }
+.hint { border: 1px dashed var(--line); border-radius: 14px; padding: 16px; color: var(--muted); display: flex; flex-direction: column; gap: 8px; align-items: flex-start }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; font-weight: 600 }
+details.history summary { cursor: pointer; color: var(--muted); font-weight: 600; padding-block: 4px }
+details.history .actions { margin-block-start: 10px }
+
+.fab { position: fixed; inset-inline: 16px; inset-block-end: calc(16px + env(safe-area-inset-bottom, 0px)); margin-inline: auto; max-width: 32rem;
+  background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 16px; padding: 15px; font-family: var(--display); font-weight: 500; font-size: 1.1rem; box-shadow: 0 6px 18px var(--shade) }
+
+dialog { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--fg); padding: 18px; width: min(30rem, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto }
+dialog::backdrop { background: var(--shade) }
+dialog h3 { font-family: var(--display); margin: 0 0 12px; font-size: 1.25rem; overflow-wrap: anywhere }
+textarea, input[type=text], input[type=tel], input[type=password], input[type=date], input[type=time], select {
+  width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-height: 44px }
+textarea { min-height: 6rem; resize: vertical }
+.stack { display: flex; flex-direction: column; gap: 10px }
+.thumbs { display: flex; flex-wrap: wrap; gap: 8px }
+.thumb { position: relative; width: 64px; height: 64px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line) }
+.thumb img { width: 100%; height: 100%; object-fit: cover }
+.thumb button { position: absolute; inset-block-start: 2px; inset-inline-end: 2px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: var(--fg); color: var(--bg); line-height: 1; padding: 0 }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 16px; min-height: 44px; font-weight: 600; text-decoration: none; color: var(--fg); display: inline-flex; align-items: center; justify-content: center }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent) }
+.btn.danger { color: var(--high); border-color: var(--high) }
+.btn:disabled { opacity: .5; cursor: default }
+.spacer { flex: 1 }
+.status { color: var(--muted); min-height: 1.4em }
+.status.err { color: var(--high) }
+.form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+.form .full { grid-column: 1 / -1 }
+.form label, .stack label.field { display: flex; flex-direction: column; gap: 3px; font-size: .9rem; color: var(--muted); min-width: 0 }
+.small { font-size: .9rem; color: var(--muted) }
+.sect { font-family: var(--display); font-weight: 500 }
+hr { border: 0; border-block-start: 1px solid var(--line); margin: 4px 0; width: 100% }
+
+.vhead { display: flex; gap: 10px; align-items: baseline }
+.vhead .imp { width: 12px; height: 12px }
+.vtags { display: flex; gap: 6px; flex-wrap: wrap; margin: -4px 0 12px }
+.tag { font-size: .8rem; font-weight: 700; border-radius: 999px; padding: 1px 10px; border: 1px solid var(--line); color: var(--muted) }
+.tag.high { border-color: var(--high); color: var(--high); background: var(--high-soft) }
+dl.kv { margin: 0 0 14px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 14px }
+dl.kv dt { color: var(--muted); font-size: .9rem; padding-block-start: 2px }
+dl.kv dd { margin: 0; overflow-wrap: anywhere; white-space: pre-line }
+dl.kv dd .rel { color: var(--muted); font-size: .9rem }
+.num { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; user-select: all }
+
+.toast { position: fixed; inset-inline: 16px; inset-block-end: calc(84px + env(safe-area-inset-bottom, 0px)); margin-inline: auto; max-width: 26rem; background: var(--fg); color: var(--bg);
+  border-radius: 12px; padding: 10px 14px; font-weight: 600; display: flex; gap: 12px; align-items: center; justify-content: center; z-index: 5 }
+.toast button { background: none; border: 0; color: inherit; text-decoration: underline; font-weight: 700; padding: 4px 6px }
+@media (prefers-reduced-motion: no-preference) { .toast { animation: rise .18s ease-out } @keyframes rise { from { transform: translateY(8px); opacity: 0 } } }
+</style>
+</head>
+<body>
+<div class="wrap" dir="rtl" lang="he">
+  <header class="head">
+    <h1>הלוז שלי</h1>
+    <span class="sub" id="todayStr"></span>
+    <button class="linkbtn" id="openSet" hidden>הגדרות</button>
+  </header>
+  <div class="setup" id="setup" hidden>
+    <span>כדי שהלוז ימלא פרטים לבד, צריך להדביק פעם אחת מפתח Claude.</span>
+    <button class="linkbtn" id="setupGo">להגדרות</button>
+  </div>
+  <main class="agenda" id="agenda"><div class="none">טוען את הלוז…</div></main>
+</div>
+<button class="fab" id="add">+ הוסף תור או סידור</button>
+
+<dialog id="cap" dir="rtl" aria-labelledby="capTitle">
+  <h3 id="capTitle">מה להוסיף?</h3>
+  <div class="stack">
+    <textarea id="msg" aria-label="הודעה או משימה" placeholder="הדבק הודעה שקיבלת, או כתוב בקצרה: &quot;לחדש רישיון עד סוף החודש&quot;"></textarea>
+    <div class="thumbs" id="thumbs" hidden></div>
+    <div class="actions">
+      <button class="btn primary" id="extract" type="button">מלא לבד</button>
+      <button class="btn" id="stop" type="button" hidden>עצור</button>
+      <button class="btn" id="pasteGo" type="button" hidden>הדבק ומלא</button>
+      <label class="btn" id="pickLbl">צילום מסך<input type="file" id="pick" accept="image/*" multiple hidden></label>
+    </div>
+    <div class="status" id="status" role="status"></div>
+    <div class="actions">
+      <button class="linkbtn" id="manual" type="button">להוסיף ידנית</button>
+      <span class="spacer"></span>
+      <button class="btn" id="capClose" type="button">סגור</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="view" dir="rtl" aria-labelledby="v-title">
+  <div class="vhead"><span class="imp" id="v-dot" aria-hidden="true"></span><h3 id="v-title"></h3></div>
+  <div class="vtags" id="v-tags"></div>
+  <dl class="kv" id="v-kv"></dl>
+  <div class="actions" id="v-links" style="margin-block-end:12px"></div>
+  <div class="actions">
+    <button class="btn primary" id="v-done" type="button">סמן כבוצע</button>
+    <button class="btn" id="v-edit" type="button">עריכה</button>
+    <span class="spacer"></span>
+    <button class="btn" id="v-close" type="button">סגור</button>
+  </div>
+</dialog>
+
+<dialog id="dlg" dir="rtl" aria-labelledby="dlgTitle">
+  <h3 id="dlgTitle">פרטים</h3>
+  <form class="form" id="form">
+    <label class="full">מה<input type="text" id="f-title" required maxlength="120"></label>
+    <label>תאריך<input type="date" id="f-date"></label>
+    <label>שעה<input type="time" id="f-time"></label>
+    <label>סוג<select id="f-type"><option value="appointment">תור (בזמן קבוע)</option><option value="errand">סידור (עד תאריך)</option></select></label>
+    <label>חשיבות<select id="f-imp"><option value="high">חשוב</option><option value="medium">רגיל</option><option value="low">גמיש</option></select></label>
+    <label class="full">איפה<input type="text" id="f-loc" maxlength="200"></label>
+    <label>עם מי<input type="text" id="f-person" maxlength="120"></label>
+    <label>טלפון<input type="tel" id="f-phone" maxlength="40" dir="ltr"></label>
+    <label class="full">הערות (מה להביא, מספר אישור)<textarea id="f-notes" style="min-height:4rem" maxlength="600"></textarea></label>
+    <div class="fwarn" id="f-warn" role="status" hidden></div>
+    <div class="actions full">
+      <button class="btn primary" type="submit" id="f-save">שמור</button>
+      <button class="btn" type="button" id="f-cancel">ביטול</button>
+      <span class="spacer"></span>
+      <button class="btn danger" type="button" id="f-del">מחק</button>
+      <button class="linkbtn" type="button" id="f-skipall" hidden>דלג על כל השאר</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="set" dir="rtl" aria-labelledby="setTitle">
+  <h3 id="setTitle">הגדרות</h3>
+  <div class="stack">
+    <div class="sect">מפתח Claude</div>
+    <label class="field">המפתח (מתחיל ב-sk-ant)<input type="password" id="s-key" autocomplete="off" spellcheck="false" dir="ltr"></label>
+    <div class="small">מקבלים אותו באתר console.anthropic.com, בעמוד API Keys. עדיף לא להפעיל שם טעינה אוטומטית, וכך ההוצאה לא תעבור את מה שטענת. המפתח נשמר רק בטלפון הזה. הודעות וצילומים נשלחים ישירות ל-Anthropic, ורק כשלוחצים "מלא לבד".</div>
+    <div class="actions"><button class="btn primary" id="s-save" type="button">שמור ובדוק</button></div>
+    <div class="status" id="s-status" role="status"></div>
+    <hr>
+    <div class="sect">גיבוי</div>
+    <div class="small">הלוז נשמר רק בטלפון הזה. כדאי לשמור גיבוי מדי פעם, למשל לפני החלפת טלפון.</div>
+    <div class="actions">
+      <button class="btn" id="s-export" type="button">שמור גיבוי לקובץ</button>
+      <label class="btn">שחזר מקובץ<input type="file" id="s-import" accept=".json,application/json" hidden></label>
+    </div>
+    <div class="actions"><span class="spacer"></span><button class="btn" id="s-close" type="button">סגור</button></div>
+  </div>
+</dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
