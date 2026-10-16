@@ -6,6 +6,8 @@ const RANK = { high: 0, medium: 1, low: 2 }, IMPNAME = { high: "חשוב", mediu
 const IN_CLAUDE = !!(window.claude && typeof window.claude.use === "function");
 const API = "https://api.anthropic.com/v1/messages", MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5"];
 const LS_ITEMS = "luz.items", LS_KEY = "luz.key";
+const DEF_NAMES = IMPNAME, LEVELS = ["high", "medium", "low"], LS_PREFS = "luz.prefs";
+const SWATCHES = ["#d9452f", "#ee7d2b", "#d9a514", "#3a9d4f", "#0b8f86", "#2f7fd8", "#7a5cd6", "#cf4b8f", "#8a9aa1", "#6d5442"];
 const SAMPLE_MSG = "שלום, נקבע לך תור לטסט שנתי במוסך הצומת ביום חמישי הקרוב בשעה 09:30, רח' התעשייה 4 חולון. נא להביא רישיון רכב ותעודת ביטוח בתוקף. לביטול: 03-5551234.";
 
 let items = [], loaded = false, store = null, engine = null, engineState = "loading";
@@ -48,6 +50,63 @@ function normItem(r, freshId) {
     doneAt: Number.isFinite(r.doneAt) ? r.doneAt : null, createdAt: Number.isFinite(r.createdAt) ? r.createdAt : Date.now()
   };
 }
+
+/* ---------- preferences: view, dot colors and level names (per device) ---------- */
+function loadPrefs() {
+  let p = {}; try { p = JSON.parse(lsGet(LS_PREFS) || "{}") || {}; } catch {}
+  const col = c => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c) ? c : null, colors = {}, names = {};
+  for (const k of LEVELS) { colors[k] = col(p.colors && p.colors[k]); names[k] = str(p.names && p.names[k], 12); }
+  return { view: p.view === "month" ? "month" : "list", colors, names };
+}
+let prefs = loadPrefs();
+const savePrefs = () => lsSet(LS_PREFS, JSON.stringify(prefs));
+const impName = k => prefs.names[k] || DEF_NAMES[k];
+function applyPrefs() {
+  const r = document.documentElement.style;
+  for (const k of LEVELS) { if (prefs.colors[k]) r.setProperty("--imp-" + k, prefs.colors[k]); else r.removeProperty("--imp-" + k); }
+  [...$("f-imp").options].forEach(o => { o.textContent = impName(o.value); });
+}
+function renderLegend() {
+  const L = $("legend"); L.textContent = "";
+  const item = (cls, text) => { const s = el("span", "li"), d = el("span", cls); d.setAttribute("aria-hidden", "true"); s.append(d, el("span", null, text)); L.append(s); };
+  for (const k of LEVELS) item("imp " + k, impName(k));
+  if (prefs.view === "month") item("imp medium ring", "דדליין");
+  L.append(el("span", "edit", "שינוי"));
+}
+function setView(v) { prefs.view = v; savePrefs(); render(); window.scrollTo(0, 0); }
+$("vList").onclick = () => setView("list");
+$("vMonth").onclick = () => setView("month");
+$("legend").onclick = () => openColors();
+function openColors() {
+  const box = $("colRows"), cs = getComputedStyle(document.documentElement); box.textContent = "";
+  const themeVar = { high: "--high", medium: "--accent", low: "--low" };
+  for (const k of LEVELS) {
+    const row = el("div", "colrow"), name = el("input");
+    name.type = "text"; name.id = "c-name-" + k; name.maxLength = 12; name.value = impName(k); name.setAttribute("aria-label", "שם לרמה " + DEF_NAMES[k]);
+    const sw = el("div", "swatches"); sw.setAttribute("role", "radiogroup"); sw.setAttribute("aria-label", "צבע לרמה " + DEF_NAMES[k]);
+    for (const [val, color] of [["auto", cs.getPropertyValue(themeVar[k]).trim()], ...SWATCHES.map(c => [c, c])]) {
+      const lab = el("label", "sw"), r = el("input"), s = el("span");
+      r.type = "radio"; r.name = "c-" + k; r.value = val; r.checked = (prefs.colors[k] || "auto") === val;
+      r.setAttribute("aria-label", val === "auto" ? "צבע ברירת מחדל" : "צבע " + val); s.style.background = color;
+      lab.append(r, s); sw.append(lab);
+    }
+    row.append(name, sw); box.append(row);
+  }
+  $("colors").showModal();
+}
+$("c-close").onclick = () => $("colors").close();
+$("c-save").onclick = () => {
+  for (const k of LEVELS) {
+    const v = (document.querySelector(`input[name="c-${k}"]:checked`) || {}).value;
+    prefs.colors[k] = v && v !== "auto" ? v : null;
+    const n = str($("c-name-" + k).value, 12); prefs.names[k] = n && n !== DEF_NAMES[k] ? n : null;
+  }
+  savePrefs(); applyPrefs(); render(); $("colors").close(); toast("נשמר");
+};
+$("c-reset").onclick = () => {
+  for (const k of LEVELS) { prefs.colors[k] = null; prefs.names[k] = null; }
+  savePrefs(); applyPrefs(); render(); $("colors").close(); toast("הוחזר לברירת המחדל");
+};
 
 /* ---------- storage ---------- */
 const localStore = {
@@ -98,12 +157,12 @@ const isPastAppt = (it, today) => it.type === "appointment" && it.date && it.dat
 function row(it, ctx, flags = {}) {
   const li = el("li", "row" + (it.done ? " done" : "") + (flags.past ? " past" : ""));
   const o = el("button", "open"); o.type = "button"; o.onclick = () => openView(it.id);
-  const t = el("div", "title"), dot = el("span", "imp " + it.importance); dot.setAttribute("role", "img"); dot.setAttribute("aria-label", IMPNAME[it.importance]);
+  const t = el("div", "title"), dot = el("span", "imp " + it.importance); dot.setAttribute("role", "img"); dot.setAttribute("aria-label", impName(it.importance));
   t.append(dot, el("span", null, it.title)); if (flags.next) t.append(el("span", "pill", "הבא"));
   o.append(t);
   const parts = []; let warn = false;
   if (ctx === "today" && it.time && !it.done) { const u = untilText(minutesUntil(it)); if (u) parts.push(u); }
-  if (it.type === "errand" && it.date && (ctx === "today" || ctx === "tomorrow" || ctx === "todo" || ctx === "overdue")) { parts.push(deadlineText(it.date)); warn = ctx === "overdue"; }
+  if (it.type === "errand" && it.date && (ctx === "today" || ctx === "tomorrow" || ctx === "todo" || ctx === "overdue" || ctx === "day")) { parts.push(deadlineText(it.date)); warn = ctx === "overdue"; }
   if (it.type === "appointment" && !it.date && ctx === "todo") { parts.push("חסר תאריך"); warn = true; }
   if (ctx === "history" && it.date) parts.push(fmtShort(it.date));
   if (it.location) parts.push(it.location); if (it.person) parts.push(it.person);
@@ -121,9 +180,15 @@ function rows(list, ctx, flagsFor) { const ul = el("ul", "rows"); list.forEach(i
 function section(cls, title, sub) { const s = el("section", "day " + cls), h = el("h2", null, title); if (sub) h.append(el("small", null, sub)); s.append(h); return s; }
 
 function render() {
-  const box = $("agenda"), today = todayIso(), tmr = addDays(today, 1);
-  $("todayStr").textContent = fmtDay(today);
+  $("todayStr").textContent = fmtDay(todayIso());
   $("setup").hidden = IN_CLAUDE || !loaded || !!lsGet(LS_KEY);
+  const month = prefs.view === "month";
+  $("vList").setAttribute("aria-pressed", String(!month)); $("vMonth").setAttribute("aria-pressed", String(month));
+  $("agenda").hidden = month; $("month").hidden = !month; renderLegend();
+  if (month) renderMonth(); else renderList();
+}
+function renderList() {
+  const box = $("agenda"), today = todayIso(), tmr = addDays(today, 1);
   box.textContent = "";
   if (!loaded) { box.append(el("div", "none", "טוען את הלוז…")); return; }
   const live = items.filter(i => !i.done && !isPastAppt(i, today));
@@ -165,6 +230,64 @@ function render() {
     a.append(clr); d.append(a); box.append(d);
   }
 }
+/* ---------- month view ---------- */
+const FMT_MONTH = new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" });
+let monthCursor = null, selDay = null;
+function shiftMonth(n) {
+  const [y, m] = monthCursor.split("-").map(Number), d = new Date(y, m - 1 + n, 1), today = todayIso();
+  monthCursor = iso(d).slice(0, 7); selDay = monthCursor === today.slice(0, 7) ? today : iso(d); render();
+}
+function renderMonth() {
+  const box = $("month"), today = todayIso(); box.textContent = "";
+  if (!loaded) { box.append(el("div", "none", "טוען את הלוז…")); return; }
+  if (!monthCursor) monthCursor = today.slice(0, 7);
+  if (!selDay) selDay = today;
+  const [y, m] = monthCursor.split("-").map(Number), first = new Date(y, m - 1, 1), offset = first.getDay(), days = new Date(y, m, 0).getDate();
+
+  const overdue = items.filter(i => !i.done && i.type === "errand" && i.date && i.date < today).length;
+  if (overdue) { const b = el("button", "banner", overdue === 1 ? "סידור אחד עבר את הדדליין. להצגה ברשימה" : `${overdue} סידורים עברו את הדדליין. להצגה ברשימה`); b.type = "button"; b.onclick = () => setView("list"); box.append(b); }
+
+  const nav = el("div", "mnav");
+  const prev = el("button", "navbtn", "›"); prev.type = "button"; prev.setAttribute("aria-label", "החודש הקודם"); prev.onclick = () => shiftMonth(-1);
+  const next = el("button", "navbtn", "‹"); next.type = "button"; next.setAttribute("aria-label", "החודש הבא"); next.onclick = () => shiftMonth(1);
+  const back = el("button", "linkbtn", "להיום"); back.type = "button"; back.hidden = monthCursor === today.slice(0, 7) && selDay === today;
+  back.onclick = () => { monthCursor = today.slice(0, 7); selDay = today; render(); };
+  nav.append(prev, el("div", "mtitle", FMT_MONTH.format(first)), back, next); box.append(nav);
+
+  const wk = el("div", "wk"); wk.setAttribute("aria-hidden", "true");
+  for (const d of ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"]) wk.append(el("span", null, d));
+  box.append(wk);
+
+  const byDate = {}; for (const it of items) if (it.date) (byDate[it.date] ||= []).push(it);
+  const grid = el("div", "mgrid"), cells = Math.ceil((offset + days) / 7) * 7;
+  for (let i = 0; i < cells; i++) {
+    const d = iso(new Date(y, m - 1, 1 - offset + i)), inMonth = d.slice(0, 7) === monthCursor;
+    const open = (byDate[d] || []).filter(x => !x.done).sort((a, b) => RANK[a.importance] - RANK[b.importance] || (a.type === "errand") - (b.type === "errand"));
+    const c = el("button", "cell" + (inMonth ? "" : " out") + (d === today ? " today" : "") + (d === selDay ? " sel" : "") + (d < today ? " pastday" : ""));
+    c.type = "button"; c.append(el("span", "num", String(Number(d.slice(8)))));
+    const dots = el("div", "dots");
+    open.slice(0, 3).forEach(x => dots.append(el("span", "imp " + x.importance + (x.type === "errand" ? " ring" : ""))));
+    if (open.length > 3) dots.append(el("span", "more", "+" + (open.length - 3)));
+    c.append(dots);
+    c.setAttribute("aria-label", fmtDay(d) + (open.length ? (open.length === 1 ? ", פריט אחד" : `, ${open.length} פריטים`) : ""));
+    if (d === selDay) c.setAttribute("aria-current", "date");
+    c.onclick = () => { selDay = d; monthCursor = d.slice(0, 7); render(); };
+    grid.append(c);
+  }
+  box.append(grid);
+
+  const n = dayDiff(selDay), rel = n === 0 ? "היום" : n === 1 ? "מחר" : n === -1 ? "אתמול" : n > 1 ? "בעוד " + nDays(n) : "לפני " + nDays(-n);
+  const sec = section("", fmtDay(selDay), rel), list = (byDate[selDay] || []).slice().sort(sortDay);
+  if (list.length) sec.append(rows(list, selDay === today ? "today" : "day", it => ({ past: isPastAppt(it, today) || (selDay === today && !!it.time && minutesUntil(it) < -5) })));
+  else sec.append(el("div", "none", "אין כלום ביום הזה."));
+  const addHere = el("button", "linkbtn", "+ להוסיף ליום הזה"); addHere.type = "button"; addHere.style.marginBlockStart = "10px";
+  addHere.onclick = () => openForm({ date: selDay }, "new"); sec.append(addHere);
+  box.append(sec);
+
+  const undated = items.filter(i => !i.done && !i.date).length;
+  if (undated) { const u = el("button", "linkbtn", undated === 1 ? "פריט אחד בלי תאריך מופיע ברשימה" : `${undated} פריטים בלי תאריך מופיעים ברשימה`); u.type = "button"; u.onclick = () => setView("list"); box.append(u); }
+}
+
 function emptyHint() {
   const h = el("div", "hint");
   h.append(el("span", null, "קבעת תור או קיבלת הודעה? לחץ על הכפתור למטה, הדבק את ההודעה או בחר צילום מסך, והפרטים ימולאו לבד."));
@@ -193,7 +316,7 @@ function openView(id) {
   const today = todayIso();
   $("v-dot").className = "imp " + it.importance; $("v-title").textContent = it.title;
   const tags = $("v-tags"); tags.textContent = "";
-  tags.append(el("span", "tag" + (it.importance === "high" ? " high" : ""), IMPNAME[it.importance]), el("span", "tag", TYPENAME[it.type]));
+  tags.append(el("span", "tag" + (it.importance === "high" ? " high" : ""), impName(it.importance)), el("span", "tag", TYPENAME[it.type]));
   if (it.done) tags.append(el("span", "tag", "בוצע"));
   const kv = $("v-kv"); kv.textContent = "";
   const add = (k, node) => { kv.append(el("dt", null, k)); const dd = el("dd"); dd.append(node); kv.append(dd); };
@@ -324,6 +447,7 @@ function buildPrompt(text) {
 - הערה קצרה שהמשתמש כתב לעצמו ("לקנות חלב", "לחדש רישיון עד סוף החודש") היא errand.
 - תאריכים יחסיים ("מחר", "ביום חמישי", "בעוד שבועיים", "סוף החודש") הופכים לתאריך מלא לפי הלוח למעלה, תמיד המועד הקרוב בעתיד. שעה בפורמט 24 שעות ("ב-4 אחה"צ" = "16:00").
 - אם מופיעים כמה מועדים (למשל תזכורת על תור קיים), קח את מועד התור עצמו.
+- ייתכן שיש כמה צילומי מסך של אותה שיחה או אותו מסמך, חלקם חופפים. אחד את המידע מכולם ואל תיצור את אותו תור או סידור פעמיים.
 - לא ממציאים: פרט שלא מופיע הוא null.
 - location: כתובת או שם מקום, כפי שיעבוד בחיפוש בניווט. person: הרופא, העסק או האדם. phone: מספר טלפון ליצירת קשר אם מופיע.
 - notes: בקצרה מה להביא, מספר אישור או תור, תנאי ביטול, מחיר. בלי לחזור על פרטים שכבר נמצאים בשדות אחרים.
@@ -350,7 +474,7 @@ async function extract() {
   if (!IN_CLAUDE && !lsGet(LS_KEY)) { resumeAfterKey = true; $("cap").close(); openSettings("כדי למלא לבד צריך להדביק פעם אחת מפתח Claude. אחרי השמירה ההודעה תמולא אוטומטית."); return; }
   const text = $("msg").value.trim().slice(0, 8000);
   if (!text && !images.length) { setStatus("הדבק קודם הודעה או בחר צילום מסך.", true); return; }
-  ctl = new AbortController(); busy(true); setStatus(images.length ? "קורא את צילום המסך…" : "קורא את ההודעה…");
+  ctl = new AbortController(); busy(true); setStatus(images.length > 1 ? `קורא ${images.length} צילומי מסך…` : images.length ? "קורא את צילום המסך…" : "קורא את ההודעה…");
   try {
     const res = await engine.run(buildPrompt(text), images.slice(), ctl.signal);
     const arr = Array.isArray(res) ? res : res && Array.isArray(res.items) ? res.items : res ? [res] : [];
@@ -386,7 +510,7 @@ function parseLoose(t) {
   throw { code: "invalid_json" };
 }
 const apiEngine = {
-  maxImages: 4,
+  maxImages: 10,
   async call(key, content, maxTokens, signal) {
     let last = { code: "upstream_error" };
     for (const model of MODELS) {
@@ -476,7 +600,7 @@ function startClock() {
   document.addEventListener("visibilitychange", tick);
 }
 async function boot() {
-  render(); syncCaptureUI(); startClock();
+  applyPrefs(); render(); syncCaptureUI(); startClock();
   if (!IN_CLAUDE) {
     engine = apiEngine; engineState = "ready"; store = localStore; localStore.load(); $("openSet").hidden = false; syncCaptureUI();
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
@@ -487,7 +611,7 @@ async function boot() {
   use("sample").then(async s => {
     if (!s) { engineState = "none"; syncCaptureUI(); return; }
     const lim = await s.limits().catch(() => null);
-    engine = { maxImages: lim && lim.images ? Math.min(4, lim.images.maxCount || 1) : 0,
+    engine = { maxImages: lim && lim.images ? Math.min(10, lim.images.maxCount || 1) : 0,
       run: (p, imgs, signal) => { const o = { cache: false, signal }; if (imgs.length) o.images = imgs; return s.json(p, o); } };
     engineState = "ready"; syncCaptureUI();
   });
