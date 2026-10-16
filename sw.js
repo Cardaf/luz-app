@@ -1,6 +1,6 @@
 // Offline shell + Android share target. Every build has its own cache, filled in one go,
 // so the page and its script always come from the same version. New versions apply on the next launch.
-const C = "luz-app-ae206667cb", SHARE = "luz-share";
+const C = "luz-app-0e9ea54504", SHARE = "luz-share";
 const ASSETS = ["./", "./app.js", "./fonts.css", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable.png"];
 self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(C).then(c => c.addAll(ASSETS.map(u => new Request(u, { cache: "reload" }))))); });
 self.addEventListener("activate", e => e.waitUntil((async () => {
